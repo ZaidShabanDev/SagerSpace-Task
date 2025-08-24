@@ -8,12 +8,12 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Menu, Settings, User } from 'lucide-react';
+import { Menu, User } from 'lucide-react';
 import { SidebarTrigger } from '../ui/sidebar';
 
 export function Header() {
   return (
-    <header className="flex items-center justify-between bg-black px-4 py-3 text-white md:px-6">
+    <header className="z-[1] flex items-center justify-between bg-black px-4 py-3 text-white md:px-6">
       <SidebarTrigger className="-ml-1" />
       {/* Right side icons and user info */}
       <div className="flex items-center gap-2 md:gap-4">
@@ -61,9 +61,9 @@ export function Header() {
               <Menu className="h-4 w-4" />
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-40">
+          <DropdownMenuContent align="end" className="bg-primary w-40 text-white">
             <DropdownMenuItem>
-              <Settings className="mr-2 h-4 w-4" />
+              <Capture className="mr-2 h-4 w-4" />
               Capture
             </DropdownMenuItem>
             <DropdownMenuItem>

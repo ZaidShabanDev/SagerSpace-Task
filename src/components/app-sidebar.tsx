@@ -1,37 +1,41 @@
-import * as React from 'react';
-
 import DashboardIcon from '@/assets/dashboard-svgrepo-com-2.svg?react';
 import MapIcon from '@/assets/location-svgrepo-com-2.svg?react';
 import myImage from '@/assets/sager_log.svg';
 
 import { Sidebar, SidebarContent, SidebarGroup, SidebarHeader, SidebarRail, useSidebar } from '@/components/ui/sidebar';
-import { useState } from 'react';
+import type { NavItem, ViewType } from '@/types';
+import { useState, type JSX } from 'react';
 
 // This is sample data.
 const data = {
   navMain: [
     {
       title: 'Dashboard',
-      url: '#1',
       icon: DashboardIcon,
     },
     {
       title: 'Map',
-      url: '#2',
       icon: MapIcon,
     },
   ],
 };
 
-export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
+interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
+  onViewChange: (view: ViewType) => void;
+}
+
+export function AppSidebar({ onViewChange, ...props }: AppSidebarProps): JSX.Element {
   const [activeItem, setActiveItem] = useState<string>(data.navMain[0]?.title || '');
   const { setOpenMobile, isMobile } = useSidebar();
 
-  const handleItemClick = (item: (typeof data.navMain)[0]) => {
+  const handleItemClick = (item: NavItem): void => {
     setActiveItem(item.title);
 
-    // Navigate to the URL
-    window.location.href = item.url;
+    if (item.title.toLowerCase() === 'map') {
+      onViewChange('map');
+    } else {
+      onViewChange('dashboard');
+    }
 
     // Close sidebar on mobile after clicking an item
     if (isMobile) {
@@ -42,7 +46,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   return (
     <Sidebar {...props}>
       <SidebarHeader>
-        <div className="flex items-center p-4">
+        <div className="z-[1] flex items-center p-4">
           <img src={myImage} alt="Description" loading="lazy" width="200" height="200" />
         </div>
       </SidebarHeader>
