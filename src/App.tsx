@@ -2,8 +2,9 @@
 import { AppSidebar } from '@/components/app-sidebar';
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar';
 import { useState, type JSX } from 'react';
+import { DroneSidebar } from './components/droneSidebar';
 import { Header } from './components/layout/header';
-import { MapComponent } from './components/MapComponent';
+import { MapComponent } from './components/mapComponent';
 import type { ViewType } from './types';
 
 function App(): JSX.Element {
@@ -12,7 +13,14 @@ function App(): JSX.Element {
   const renderContent = (): JSX.Element => {
     switch (activeView) {
       case 'map':
-        return <MapComponent />;
+        return (
+          <div className="flex h-[100%] w-full">
+            <DroneSidebar />
+            <div className="flex-1">
+              <MapComponent />
+            </div>
+          </div>
+        );
       default:
         return (
           <div className="flex flex-1 flex-col gap-4 p-4">
