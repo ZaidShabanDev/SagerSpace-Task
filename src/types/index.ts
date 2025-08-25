@@ -48,4 +48,9 @@ export interface DroneListPanelProps {
   onDroneSelect: (registrationId: string, coordinates: [number, number]) => void;
 }
 
+export interface NavItem {
+  title: string;
+  icon: React.ComponentType<{ className?: string }>;
+}
+
 export type ViewType = 'dashboard' | 'map';
