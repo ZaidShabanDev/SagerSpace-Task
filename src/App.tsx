@@ -12,14 +12,7 @@ function App(): JSX.Element {
   const renderContent = (): JSX.Element => {
     switch (activeView) {
       case 'map':
-        return (
-          <div className="flex h-[100%] w-full">
-            {/* <DroneSidebar /> */}
-            <div className="flex-1">
-              <MapComponent />
-            </div>
-          </div>
-        );
+        return <MapComponent />;
       default:
         return (
           <div className="flex flex-1 flex-col gap-4 p-4">

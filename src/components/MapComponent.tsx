@@ -1,10 +1,12 @@
 import Drone from '@/assets/drone.svg?react';
 import type { DroneData, DroneJourney, DronePosition } from '@/types';
+import { List } from 'lucide-react';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import { useCallback, useEffect, useRef, useState, type JSX } from 'react';
 import { createRoot } from 'react-dom/client';
 import io from 'socket.io-client';
+import { DroneSidebar } from './droneSidebar';
 
 export function MapComponent(): JSX.Element {
   const map = useRef<mapboxgl.Map | null>(null);
@@ -12,6 +14,27 @@ export function MapComponent(): JSX.Element {
   const pathSourcesRef = useRef<Map<string, string>>(new Map()); // Track path sources by registration
   const [allDroneJourneys, setAllDroneJourneys] = useState<Map<string, DroneJourney>>(new Map());
   const [redDroneCount, setRedDroneCount] = useState(0);
+  const [panelOpen, setPanelOpen] = useState(false);
+  const [selectedDroneId, setSelectedDroneId] = useState<string | null>(null);
+
+  const handleDroneSelect = useCallback((registrationId: string, coordinates: [number, number]) => {
+    setSelectedDroneId(registrationId);
+    if (map.current) {
+      map.current.flyTo({
+        center: coordinates,
+        zoom: 15,
+        duration: 1000,
+      });
+    }
+  }, []);
+
+  const handleMarkerClick = useCallback((registrationId: string) => {
+    setSelectedDroneId(registrationId);
+  }, []);
+
+  const togglePanel = useCallback(() => {
+    setPanelOpen((prev) => !prev);
+  }, []);
 
   const initializeMap = useCallback((container: HTMLDivElement | null) => {
     if (!container || map.current) return;
@@ -137,6 +160,11 @@ export function MapComponent(): JSX.Element {
     `);
 
       marker.setPopup(popup);
+
+      marker.getElement().addEventListener('click', () => {
+        handleMarkerClick(registrationId);
+      });
+
       return marker;
     },
     [getDroneColor]
@@ -324,6 +352,9 @@ export function MapComponent(): JSX.Element {
                 positions: [...existingJourney.positions, newPosition],
                 currentPosition: newPosition,
                 lastUpdated: Date.now(),
+                serial: droneFeature.properties.serial,
+                pilot: droneFeature.properties.pilot,
+                organization: droneFeature.properties.organization,
               };
               newJourneysMap.set(registrationId, updatedJourney);
             } else {
@@ -333,6 +364,9 @@ export function MapComponent(): JSX.Element {
                 positions: [newPosition],
                 currentPosition: newPosition,
                 lastUpdated: Date.now(),
+                serial: droneFeature.properties.serial,
+                pilot: droneFeature.properties.pilot,
+                organization: droneFeature.properties.organization,
               };
               newJourneysMap.set(registrationId, newJourney);
             }
@@ -414,38 +448,28 @@ export function MapComponent(): JSX.Element {
     <>
       <div id="map-container" ref={initializeMap} />
 
-      {/* Red drone counter */}
-      <div
-        style={{
-          position: 'absolute',
-          bottom: '16px',
-          right: '16px',
-          backgroundColor: 'rgb(217,217,217)',
-          color: 'black',
-          padding: '8px 12px',
-          borderRadius: '10px',
-          fontSize: '14px',
-          fontWeight: '600',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '6px',
-          boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
-          fontFamily: 'system-ui',
-        }}
-      >
-        <span
-          style={{
-            width: '25px',
-            height: '25px',
-            backgroundColor: '#1F2327',
-            borderRadius: '50%',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            color: 'white',
-            fontSize: '1em',
-          }}
+      {/* Drone List Panel */}
+      <DroneSidebar
+        drones={allDroneJourneys}
+        isOpen={panelOpen}
+        onClose={() => setPanelOpen(false)}
+        selectedDroneId={selectedDroneId}
+        onDroneSelect={handleDroneSelect}
+      />
+
+      {/* Panel Toggle Button */}
+      {!panelOpen && (
+        <button
+          onClick={togglePanel}
+          className="absolute bottom-4 left-4 z-[999] flex h-12 w-12 cursor-pointer items-center justify-center rounded-full border-none bg-black/90 text-white shadow-[0_4px_12px_rgba(0,0,0,0.15)] transition-all duration-200 ease-in-out hover:scale-105 hover:bg-neutral-700"
         >
+          <List size={20} />
+        </button>
+      )}
+
+      {/* Red drone counter */}
+      <div className="absolute bottom-4 right-4 flex items-center gap-1.5 rounded-[10px] bg-[rgb(217,217,217)] px-3 py-2 font-sans text-sm font-semibold text-black shadow-[0_2px_8px_rgba(0,0,0,0.3)]">
+        <span className="flex h-[25px] w-[25px] items-center justify-center rounded-full bg-[#1F2327] text-base text-white">
           {redDroneCount}
         </span>
         Drone Flying

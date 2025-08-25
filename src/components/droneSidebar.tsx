@@ -1,238 +1,100 @@
-import { useEffect, useState, type JSX } from 'react';
-import io from 'socket.io-client';
+import type { DroneListPanelProps } from '@/types';
+import { Navigation, X } from 'lucide-react';
+import { type JSX } from 'react';
 
-interface DroneData {
-  type: string;
-  features: Array<{
-    type: string;
-    properties: {
-      serial: string;
-      registration: string;
-      Name: string;
-      altitude: number;
-      pilot: string;
-      organization: string;
-      yaw: number;
-    };
-    geometry: {
-      coordinates: [number, number];
-      type: string;
-    };
-  }>;
-}
-
-export function DroneSidebar(): JSX.Element {
-  const [connectionStatus, setConnectionStatus] = useState('Disconnected');
-  const [allDronesData, setAllDronesData] = useState<Map<string, any>>(new Map());
-  const [activeTab, setActiveTab] = useState<'drones' | 'history'>('drones');
-
-  useEffect(() => {
-    const socket = io('http://localhost:9013', {
-      transports: ['polling'],
-    });
-
-    socket.on('connect', () => {
-      setConnectionStatus('Connected');
-    });
-
-    socket.on('disconnect', () => {
-      setConnectionStatus('Disconnected');
-    });
-
-    socket.on('connect_error', (error) => {
-      console.error('DroneSidebar: Connection error:', error);
-      setConnectionStatus('Error');
-    });
-
-    // Listen for individual drone updates via WebSocket
-    socket.on('message', (data: DroneData) => {
-      if (data.features && data.features.length > 0) {
-        // Process each drone feature and add/update in the collection
-        setAllDronesData((prev) => {
-          const newDronesMap = new Map(prev);
-
-          data.features.forEach((droneFeature) => {
-            const serial = droneFeature.properties.serial;
-            // Add timestamp to track when we last received data for this drone
-            const droneWithTimestamp = {
-              ...droneFeature,
-              lastUpdated: Date.now(),
-            };
-            newDronesMap.set(serial, droneWithTimestamp);
-          });
-
-          return newDronesMap;
-        });
-      }
-    });
-
-    // Clean up old drone data (remove drones not updated in 30 seconds)
-    const cleanupInterval = setInterval(() => {
-      const thirtySecondsAgo = Date.now() - 30000;
-
-      setAllDronesData((prev) => {
-        const updatedMap = new Map();
-
-        prev.forEach((drone, serial) => {
-          if (drone.lastUpdated > thirtySecondsAgo) {
-            updatedMap.set(serial, drone);
-          }
-        });
-
-        return updatedMap;
-      });
-    }, 10000); // Run cleanup every 10 seconds
-
-    return () => {
-      clearInterval(cleanupInterval);
-      socket.close();
-    };
-  }, []);
-
-  const getAllDrones = () => {
-    return Array.from(allDronesData.values());
+export function DroneSidebar({
+  drones,
+  isOpen,
+  onClose,
+  selectedDroneId,
+  onDroneSelect,
+}: DroneListPanelProps): JSX.Element {
+  const getDroneColor = (registration: string): string => {
+    const registrationParts = registration.split('-');
+    const isGreen = registrationParts[1]?.startsWith('B');
+    return isGreen ? '#24ff00' : '#FF000f';
   };
 
-  const getDronesInSky = () => {
-    const allDrones = getAllDrones();
+  const droneList = Array.from(drones.values()).filter(
+    (journey) => journey.currentPosition && journey.currentPosition.altitude > 0
+  );
 
-    return allDrones.filter((drone) => {
-      // Filter based on altitude (assuming drones with altitude > 0 are in the sky)
-      return drone.properties.altitude > 0;
-    });
-  };
-
-  const getDronesByStatus = () => {
-    const allDrones = getAllDrones();
-    const inSky = getDronesInSky();
-    const onGround = allDrones.filter((drone) => drone.properties.altitude === 0);
-
-    return {
-      inSky,
-      onGround,
-      total: allDrones.length,
-    };
-  };
-
-  const { inSky, onGround, total } = getDronesByStatus();
+  if (!isOpen) return <></>;
 
   return (
-    <div className="z-[1] flex h-screen w-80 flex-col border-r border-gray-700 bg-black/90 text-white">
-      {/* Header */}
-      <div className="flex-shrink-0 border-b border-gray-700 p-4">
-        <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-white">DRONE FLYING</h2>
-          {/* Connection Status Indicator */}
-          <div className="flex items-center space-x-2">
-            <div
-              className={`h-2 w-2 rounded-full ${
-                connectionStatus === 'Connected'
-                  ? 'bg-green-500'
-                  : connectionStatus === 'Disconnected'
-                    ? 'bg-yellow-500'
-                    : 'bg-red-500'
-              }`}
-            ></div>
-            <span className="text-xs text-gray-400">{connectionStatus}</span>
-          </div>
-        </div>
+    <div className="absolute left-0 top-0 z-[1000] flex h-screen w-80 animate-[slideIn_0.3s_ease-out] flex-col border-r border-black/10 bg-black font-sans shadow-[2px_0_12px_rgba(0,0,0,0.15)]">
+      <style>{`
+        @keyframes slideIn {
+          from { transform: translateX(-100%); }
+          to { transform: translateX(0); }
+        }
+      `}</style>
 
-        {/* Tabs */}
-        <div className="flex space-x-6">
-          <button
-            onClick={() => setActiveTab('drones')}
-            className={`border-b-2 pb-2 text-sm transition-colors ${
-              activeTab === 'drones' ? 'border-red-500 text-white' : 'border-transparent text-gray-400 hover:text-white'
-            }`}
-          >
-            Drones ({inSky.length})
-          </button>
-          <button
-            onClick={() => setActiveTab('history')}
-            className={`border-b-2 pb-2 text-sm transition-colors ${
-              activeTab === 'history'
-                ? 'border-red-500 text-white'
-                : 'border-transparent text-gray-400 hover:text-white'
-            }`}
-          >
-            Flights History
-          </button>
+      {/* Header */}
+      <div className="flex items-center justify-between border-b border-black/10 bg-black/80 px-5 py-4">
+        <div>
+          <h2 className="m-0 text-lg font-semibold text-white">Drones Flying</h2>
         </div>
+        <button
+          onClick={onClose}
+          className="flex cursor-pointer items-center justify-center rounded-md border-none bg-transparent p-2 text-white transition-all duration-200 hover:bg-black/5 hover:text-white"
+        >
+          <X size={20} />
+        </button>
       </div>
 
-      {/* Content */}
-      <div className="flex-1 overflow-y-auto">
-        {activeTab === 'drones' && (
-          <div className="space-y-0">
-            {connectionStatus === 'Connected' ? (
-              inSky.length > 0 ? (
-                inSky.map((drone, index) => (
-                  <div
-                    key={drone.properties.serial}
-                    className="cursor-pointer border-b border-gray-700/50 p-4 transition-colors hover:bg-gray-800/50"
-                  >
-                    {/* Drone Name and Status */}
-                    <div className="mb-2 flex items-center justify-between">
-                      <h3 className="font-medium text-white">{drone.properties.Name}</h3>
-                      <div className="flex items-center space-x-2">
-                        <span className="text-xs text-gray-400">{drone.properties.altitude}m</span>
-                        <div
-                          className={`h-3 w-3 rounded-full ${
-                            drone.properties.registration.split('-')[1]?.startsWith('B') ? 'bg-green-500' : 'bg-red-500'
-                          }`}
-                        ></div>
-                      </div>
-                    </div>
+      {/* Drone List */}
+      <div className="flex-1 overflow-y-auto py-3">
+        {droneList.length === 0 ? (
+          <div className="px-5 py-10 text-center text-sm text-white">No active drones</div>
+        ) : (
+          droneList.map((journey) => {
+            const isSelected = selectedDroneId === journey.registrationId;
+            const droneColor = getDroneColor(journey.registrationId);
 
-                    {/* Details Grid */}
-                    <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
-                      <div>
-                        <span className="text-gray-400">Serial #</span>
-                        <div className="text-gray-300">{drone.properties.serial}</div>
-                      </div>
-                      <div>
-                        <span className="text-gray-400">Registration #</span>
-                        <div className="text-gray-300">{drone.properties.registration}</div>
-                      </div>
-                      <div>
-                        <span className="text-gray-400">Pilot</span>
-                        <div className="text-gray-300">{drone.properties.pilot}</div>
-                      </div>
-                      <div>
-                        <span className="text-gray-400">Organization</span>
-                        <div className="text-gray-300">{drone.properties.organization}</div>
-                      </div>
-                    </div>
-                  </div>
-                ))
-              ) : (
-                <div className="p-4 text-center text-gray-400">
-                  <p>No drones currently in the sky</p>
+            return (
+              <div
+                key={journey.registrationId}
+                onClick={() => {
+                  if (journey.currentPosition) {
+                    onDroneSelect(journey.registrationId, [journey.currentPosition.lng, journey.currentPosition.lat]);
+                  }
+                }}
+                className={`relative cursor-pointer border-b border-black/5 px-5 py-4 transition-all duration-200 ${
+                  isSelected
+                    ? `border-l-4 border-l-[${droneColor}] bg-[rgb(37,37,38)]`
+                    : 'border-l-4 border-l-transparent bg-transparent'
+                }`}
+              >
+                <div className="mb-2 flex items-center">
+                  <div className="mr-2 h-2 w-2 flex-shrink-0 rounded-full" style={{ backgroundColor: droneColor }} />
+                  <h3 className="m-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap text-sm font-semibold text-white">
+                    {journey.currentPosition?.name}
+                  </h3>
+                  <Navigation size={14} className="ml-2 flex-shrink-0 text-white" />
                 </div>
-              )
-            ) : (
-              <div className="p-4 text-center text-gray-400">
-                {connectionStatus === 'Disconnected'
-                  ? 'Connecting to drone server...'
-                  : connectionStatus === 'Error'
-                    ? 'Failed to connect to drone server'
-                    : 'Establishing connection...'}
-              </div>
-            )}
-          </div>
-        )}
 
-        {activeTab === 'history' && (
-          <div className="p-4 text-center text-gray-400">
-            <p>Flight history feature coming soon...</p>
-            {allDronesData && (
-              <div className="mt-4 text-left">
-                <p className="text-sm">Total drones tracked: {total}</p>
-                <p className="text-sm">Currently in sky: {inSky.length}</p>
-                <p className="text-sm">On ground: {onGround.length}</p>
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div className="flex flex-col">
+                    <span className="text-white">Serial #</span>
+                    <span className="font-medium text-[#fbfbfe]">{journey.serial}</span>
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="text-white">Registration #</span>
+                    <span className="font-medium text-[#fbfbfe]">{journey.registrationId}</span>
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="text-white">Pilot</span>
+                    <span className="font-medium text-[#fbfbfe]">{journey.pilot}</span>
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="text-white">Organization</span>
+                    <span className="font-medium text-[#fbfbfe]">{journey.organization}</span>
+                  </div>
+                </div>
               </div>
-            )}
-          </div>
+            );
+          })
         )}
       </div>
     </div>

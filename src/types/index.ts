@@ -35,6 +35,17 @@ export interface DroneJourney {
   positions: DronePosition[];
   currentPosition: DronePosition | null;
   lastUpdated: number;
+  serial: string;
+  pilot: string;
+  organization: string;
+}
+
+export interface DroneListPanelProps {
+  drones: Map<string, DroneJourney>;
+  isOpen: boolean;
+  onClose: () => void;
+  selectedDroneId: string | null;
+  onDroneSelect: (registrationId: string, coordinates: [number, number]) => void;
 }
 
 export type ViewType = 'dashboard' | 'map';
