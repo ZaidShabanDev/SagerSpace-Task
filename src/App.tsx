@@ -2,7 +2,6 @@
 import { AppSidebar } from '@/components/app-sidebar';
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar';
 import { useState, type JSX } from 'react';
-import { DroneSidebar } from './components/droneSidebar';
 import { Header } from './components/layout/header';
 import { MapComponent } from './components/MapComponent';
 import type { ViewType } from './types';
@@ -15,7 +14,7 @@ function App(): JSX.Element {
       case 'map':
         return (
           <div className="flex h-[100%] w-full">
-            <DroneSidebar />
+            {/* <DroneSidebar /> */}
             <div className="flex-1">
               <MapComponent />
             </div>

@@ -1,52 +1,17 @@
 import Drone from '@/assets/drone.svg?react';
+import type { DroneData, DroneJourney, DronePosition } from '@/types';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import { useCallback, useEffect, useRef, useState, type JSX } from 'react';
 import { createRoot } from 'react-dom/client';
 import io from 'socket.io-client';
 
-interface DroneData {
-  type: string;
-  features: Array<{
-    type: string;
-    properties: {
-      serial: string;
-      registration: string;
-      Name: string;
-      altitude: number;
-      pilot: string;
-      organization: string;
-      yaw: number;
-    };
-    geometry: {
-      coordinates: [number, number];
-      type: string;
-    };
-  }>;
-}
-
-interface DroneWithTimestamp {
-  type: string;
-  properties: {
-    serial: string;
-    registration: string;
-    Name: string;
-    altitude: number;
-    pilot: string;
-    organization: string;
-    yaw: number;
-  };
-  geometry: {
-    coordinates: [number, number];
-    type: string;
-  };
-  lastUpdated: number;
-}
-
 export function MapComponent(): JSX.Element {
   const map = useRef<mapboxgl.Map | null>(null);
   const markersRef = useRef<Map<string, mapboxgl.Marker>>(new Map());
-  const [allDronesData, setAllDronesData] = useState<Map<string, DroneWithTimestamp>>(new Map());
+  const pathSourcesRef = useRef<Map<string, string>>(new Map()); // Track path sources by registration
+  const [allDroneJourneys, setAllDroneJourneys] = useState<Map<string, DroneJourney>>(new Map());
+  const [redDroneCount, setRedDroneCount] = useState(0);
 
   const initializeMap = useCallback((container: HTMLDivElement | null) => {
     if (!container || map.current) return;
@@ -61,183 +26,333 @@ export function MapComponent(): JSX.Element {
     });
   }, []);
 
-  const createDroneMarker = useCallback((drone: DroneWithTimestamp) => {
-    if (!map.current) return null;
+  const getDroneColor = useCallback((registration: string): { background: string; border: string } => {
+    const isGreen = registration.split('-')[1]?.startsWith('B');
+    return {
+      background: isGreen ? 'rgba(36,255,0)' : 'rgba(255,0,15)',
+      border: isGreen ? '#24ff00' : '#FF000f',
+    };
+  }, []);
 
-    const coordinates = drone.geometry.coordinates as [number, number];
-    const { properties } = drone;
+  const formatFlightTime = useCallback((journey: DroneJourney): string => {
+    if (journey.positions.length < 2) return '00:00:00';
 
-    // Create a div element for the marker
-    const markerElement = document.createElement('div');
-    markerElement.style.width = '32px';
-    markerElement.style.height = '32px';
-    markerElement.style.cursor = 'pointer';
+    const startTime = journey.positions[0].timestamp;
+    const currentTime = journey.currentPosition?.timestamp || Date.now();
+    const durationMs = currentTime - startTime;
 
-    // Create a React root and render the drone SVG with rotation based on yaw
-    const root = createRoot(markerElement);
-    root.render(
-      <div
-        style={{
-          width: '32px',
-          height: '32px',
-          borderRadius: '50%',
-          backgroundColor: properties.registration.split('-')[1]?.startsWith('B')
-            ? 'rgba(16, 185, 129, 0.8)'
-            : 'rgba(239, 68, 68, 0.8)',
-          filter: 'drop-shadow(0px 2px 4px rgba(0,0,0,0.5))',
-          opacity: properties.altitude > 0 ? '1' : '0.6',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          cursor: 'pointer',
-          position: 'relative', // Make sure the container is positioned
-        }}
-      >
-        <Drone width={20} height={20} />
+    const hours = Math.floor(durationMs / 3600000);
+    const minutes = Math.floor((durationMs % 3600000) / 60000);
+    const seconds = Math.floor((durationMs % 60000) / 1000);
 
-        {/* Arrow that moves around the edge pointing in yaw direction */}
+    return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+  }, []);
+
+  const createDroneMarker = useCallback(
+    (journey: DroneJourney) => {
+      if (!map.current || !journey.currentPosition) return null;
+
+      const { currentPosition, registrationId } = journey;
+      const coordinates = [currentPosition.lng, currentPosition.lat] as [number, number];
+      const colors = getDroneColor(registrationId);
+      const flightTime = formatFlightTime(journey);
+
+      // Create a div element for the marker
+      const markerElement = document.createElement('div');
+      markerElement.style.width = '32px';
+      markerElement.style.height = '32px';
+      markerElement.style.cursor = 'pointer';
+
+      // Create a React root and render the drone SVG with rotation based on yaw
+      const root = createRoot(markerElement);
+      root.render(
         <div
           style={{
-            position: 'absolute',
-            width: '10px',
-            height: '10px',
-            color: properties.registration.split('-')[1]?.startsWith('B')
-              ? 'rgba(16, 185, 129, 0.8)'
-              : 'rgba(239, 68, 68, 0.8)',
-            borderLeft: '6px solid transparent',
-            borderRight: '6px solid transparent',
-            borderBottom: '12px solid ',
-            // Calculate position around the circle's edge
-            left: `${20 + 18 * Math.cos(((properties.yaw - 90) * Math.PI) / 180)}px`,
-            top: `${20 + 18 * Math.sin(((properties.yaw - 90) * Math.PI) / 180)}px`,
-            // Transform to center the arrow and point outward
-            transform: `translate(-50%, -50%) rotate(${properties.yaw}deg)`,
+            width: '32px',
+            height: '32px',
+            borderRadius: '50%',
+            backgroundColor: colors.background,
+            filter: 'drop-shadow(0px 2px 4px rgba(0,0,0,0.5))',
+            opacity: currentPosition.altitude > 0 ? '1' : '0.6',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            cursor: 'pointer',
+            position: 'relative',
+            // Rotate the entire marker to face yaw direction
+            transform: `rotate(${currentPosition.yaw}deg)`,
             transformOrigin: 'center',
           }}
-        />
-      </div>
-    );
+        >
+          <Drone width={20} height={20} />
 
-    // Create the marker
-    const marker = new mapboxgl.Marker({
-      element: markerElement,
-      anchor: 'center',
-    })
-      .setLngLat(coordinates)
-      .addTo(map.current);
+          <div
+            style={{
+              position: 'absolute',
+              top: '-8px',
+              left: '50%',
+              width: '0',
+              height: '0',
+              borderLeft: '6px solid transparent',
+              borderRight: '6px solid transparent',
+              borderBottom: `12px solid ${colors.border}`,
+              transform: 'translateX(-50%)',
+              transformOrigin: 'center',
+            }}
+          />
+        </div>
+      );
 
-    const popup = new mapboxgl.Popup({
-      offset: 25,
-      closeButton: false,
-      closeOnClick: true,
-    }).setHTML(`
-      <div style="padding: 12px; min-width: 240px; font-family: system-ui;">
-        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
-          <h3 style="margin: 0; color: #1f2937; font-size: 16px; font-weight: 600;">
-            ${properties.Name}
-          </h3>
-        </div>
-        
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px;">
-          <div>
-            <div style="font-size: 11px; color: #6b7280; margin-bottom: 2px;">Altitude</div>
-            <div style="font-size: 12px; color: #374151; font-weight: 500;">${properties.altitude}m</div>
+      // Create the marker
+      const marker = new mapboxgl.Marker({
+        element: markerElement,
+        anchor: 'center',
+      })
+        .setLngLat(coordinates)
+        .addTo(map.current);
+
+      const popup = new mapboxgl.Popup({
+        offset: 25,
+        closeButton: false,
+        closeOnClick: true,
+      }).setHTML(`
+        <div style="padding: 6px; min-width: 140px; font-family: system-ui;">
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+            <h3 style="margin: 0; color: #fff; font-size: 16px; font-weight: 600;">
+              ${currentPosition.name}
+            </h3>
           </div>
-          <div>
-            <div style="font-size: 11px; color: #6b7280; margin-bottom: 2px;">Registration #</div>
-            <div style="font-size: 12px; color: #374151; font-weight: 500;">${properties.registration}</div>
+          
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-family: system-ui; margin-bottom: 2px;">
+            <div>
+              <div style="font-size: 11px; color: #fff; margin-bottom: 2px;">Altitude</div>
+              <div style="font-size: 12px; color: #fbfbfe; font-weight: 500;">${currentPosition.altitude} m</div>
+            </div>
+            <div>
+              <div style="font-size: 11px; color: #fff; margin-bottom: 2px;">Flight Time</div>
+              <div style="font-size: 12px; color: #fbfbfe; font-weight: 500;">${flightTime}</div>
+            </div>
           </div>
         </div>
-      </div>
     `);
 
-    marker.setPopup(popup);
-    return marker;
-  }, []);
+      marker.setPopup(popup);
+      return marker;
+    },
+    [getDroneColor]
+  );
+
+  const updateDronePaths = useCallback(() => {
+    if (!map.current) return;
+
+    allDroneJourneys.forEach((journey, registrationId) => {
+      if (journey.positions.length < 2) return; // Need at least 2 points for a line
+
+      const sourceId = `drone-path-${registrationId}`;
+      const layerId = `drone-path-layer-${registrationId}`;
+      const colors = getDroneColor(registrationId);
+
+      // Create coordinates array for the path
+      const coordinates = journey.positions.map((pos) => [pos.lng, pos.lat]);
+
+      const pathData = {
+        type: 'Feature' as const,
+        properties: {},
+        geometry: {
+          type: 'LineString' as const,
+          coordinates: coordinates,
+        },
+      };
+
+      // Check if source exists, update or create
+      if (!map.current) return;
+
+      if (map.current.getSource(sourceId)) {
+        // Update existing source
+        const source = map.current.getSource(sourceId) as mapboxgl.GeoJSONSource;
+        source.setData(pathData);
+      } else {
+        // Create new source and layer
+        map.current.addSource(sourceId, {
+          type: 'geojson',
+          data: pathData,
+        });
+
+        map.current.addLayer({
+          id: layerId,
+          type: 'line',
+          source: sourceId,
+          layout: {
+            'line-join': 'round',
+            'line-cap': 'round',
+          },
+          paint: {
+            'line-color': colors.border,
+            'line-width': 3,
+            'line-opacity': 0.7,
+          },
+        });
+
+        pathSourcesRef.current.set(registrationId, sourceId);
+      }
+    });
+  }, [allDroneJourneys, getDroneColor]);
 
   const updateDroneMarkers = useCallback(() => {
     if (!map.current) return;
 
-    const currentDrones = Array.from(allDronesData.values());
+    const currentJourneys = Array.from(allDroneJourneys.values());
     const currentMarkers = markersRef.current;
 
     // Remove markers for drones that no longer exist
-    currentMarkers.forEach((marker, serial) => {
-      if (!allDronesData.has(serial)) {
+    currentMarkers.forEach((marker, registrationId) => {
+      if (!allDroneJourneys.has(registrationId)) {
         marker.remove();
-        currentMarkers.delete(serial);
+        currentMarkers.delete(registrationId);
+
+        // Remove path layer and source
+        const sourceId = pathSourcesRef.current.get(registrationId);
+        if (!map.current) return;
+
+        if (sourceId && map.current.getLayer(`drone-path-layer-${registrationId}`)) {
+          map.current.removeLayer(`drone-path-layer-${registrationId}`);
+          map.current.removeSource(sourceId);
+          pathSourcesRef.current.delete(registrationId);
+        }
       }
     });
 
-    // Add or update markers for current drones
-    currentDrones.forEach((drone) => {
-      const serial = drone.properties.serial;
-      const existingMarker = currentMarkers.get(serial);
+    // Add or update markers for current drone journeys
+    currentJourneys.forEach((journey) => {
+      if (!journey.currentPosition) return;
+
+      const registrationId = journey.registrationId;
+      const existingMarker = currentMarkers.get(registrationId);
+      const coordinates = [journey.currentPosition.lng, journey.currentPosition.lat] as [number, number];
+      const flightTime = formatFlightTime(journey);
 
       if (existingMarker) {
-        // Update existing marker position and popup
-        const coordinates = drone.geometry.coordinates as [number, number];
+        // Update existing marker position
         existingMarker.setLngLat(coordinates);
 
-        // Update the marker element with new rotation
+        // Update marker rotation for yaw direction
         const markerElement = existingMarker.getElement();
-        const svgElement = markerElement.querySelector('svg');
-        if (svgElement) {
-          svgElement.style.transform = `rotate(${drone.properties.yaw || 0}deg)`;
-          svgElement.style.opacity = drone.properties.altitude > 0 ? '1' : '0.6';
+        const innerCircle = markerElement.querySelector('div');
+        if (innerCircle) {
+          innerCircle.style.transform = `rotate(${journey.currentPosition.yaw}deg)`;
+        }
+
+        // Update popup content
+        const popup = existingMarker.getPopup();
+        if (popup) {
+          popup.setHTML(`
+            <div style="padding: 6px; min-width: 140px; font-family: system-ui;">
+              <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+                <h3 style="margin: 0; color: #fff; font-size: 16px; font-weight: 600;">
+                  ${journey.currentPosition.name}
+                </h3>
+              </div>
+              
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-family: system-ui; margin-bottom: 2px;">
+                <div>
+                  <div style="font-size: 11px; color: #fff; margin-bottom: 2px;">Altitude</div>
+                  <div style="font-size: 12px; color: #fbfbfe; font-weight: 500;">${journey.currentPosition.altitude} m</div>
+                </div>
+                <div>
+                  <div style="font-size: 11px; color: #fff; margin-bottom: 2px;">Flight Time</div>
+                  <div style="font-size: 12px; color: #fbfbfe; font-weight: 500;">${flightTime}</div>
+                </div>
+              </div>
+            </div>
+          `);
         }
       } else {
         // Create new marker
-        const newMarker = createDroneMarker(drone);
+        const newMarker = createDroneMarker(journey);
         if (newMarker) {
-          currentMarkers.set(serial, newMarker);
+          currentMarkers.set(registrationId, newMarker);
         }
       }
     });
-  }, [allDronesData, createDroneMarker]);
+  }, [allDroneJourneys, createDroneMarker]);
 
-  // Update markers whenever drone data changes
+  // Update markers and paths whenever drone data changes
   useEffect(() => {
     updateDroneMarkers();
-  }, [updateDroneMarkers]);
+    updateDronePaths();
+  }, [updateDroneMarkers, updateDronePaths]);
 
+  // Listen for individual drone updates via WebSocket
   useEffect(() => {
     const socket = io('http://localhost:9013', {
       transports: ['polling'],
     });
 
-    // Listen for individual drone updates via WebSocket
     socket.on('message', (data: DroneData) => {
       if (data.features && data.features.length > 0) {
-        // Process each drone feature and add/update in the collection
-        setAllDronesData((prev) => {
-          const newDronesMap = new Map(prev);
+        // Process each drone feature and add to journey tracking
+        setAllDroneJourneys((prev) => {
+          const newJourneysMap = new Map(prev);
 
           data.features.forEach((droneFeature) => {
-            const serial = droneFeature.properties.serial;
-            // Add timestamp to track when we last received data for this drone
-            const droneWithTimestamp: DroneWithTimestamp = {
-              ...droneFeature,
-              lastUpdated: Date.now(),
+            const registrationId = droneFeature.properties.registration;
+            const newPosition: DronePosition = {
+              lat: droneFeature.geometry.coordinates[1],
+              lng: droneFeature.geometry.coordinates[0],
+              altitude: droneFeature.properties.altitude,
+              yaw: droneFeature.properties.yaw,
+              timestamp: Date.now(),
+              name: droneFeature.properties.Name,
+              pilot: droneFeature.properties.pilot,
+              organization: droneFeature.properties.organization,
+              serial: droneFeature.properties.serial,
             };
-            newDronesMap.set(serial, droneWithTimestamp);
+
+            // Only process drones with altitude > 0
+            if (newPosition.altitude === 0) {
+              if (newJourneysMap.has(registrationId)) {
+                newJourneysMap.delete(registrationId);
+              }
+              return;
+            }
+
+            if (newJourneysMap.has(registrationId)) {
+              // Update existing journey
+              const existingJourney = newJourneysMap.get(registrationId)!;
+              const updatedJourney: DroneJourney = {
+                ...existingJourney,
+                positions: [...existingJourney.positions, newPosition],
+                currentPosition: newPosition,
+                lastUpdated: Date.now(),
+              };
+              newJourneysMap.set(registrationId, updatedJourney);
+            } else {
+              // Create new journey
+              const newJourney: DroneJourney = {
+                registrationId,
+                positions: [newPosition],
+                currentPosition: newPosition,
+                lastUpdated: Date.now(),
+              };
+              newJourneysMap.set(registrationId, newJourney);
+            }
           });
 
-          return newDronesMap;
+          return newJourneysMap;
         });
       }
     });
 
-    // Clean up old drone data (remove drones not updated in 30 seconds)
+    // Clean up old drone journeys (remove journeys not updated in 30 seconds)
     const cleanupInterval = setInterval(() => {
       const thirtySecondsAgo = Date.now() - 30000;
 
-      setAllDronesData((prev) => {
+      setAllDroneJourneys((prev) => {
         const updatedMap = new Map();
 
-        prev.forEach((drone, serial) => {
-          if (drone.lastUpdated > thirtySecondsAgo) {
-            updatedMap.set(serial, drone);
+        prev.forEach((journey, registrationId) => {
+          if (journey.lastUpdated > thirtySecondsAgo) {
+            updatedMap.set(registrationId, journey);
           }
         });
 
@@ -248,23 +363,93 @@ export function MapComponent(): JSX.Element {
     return () => {
       clearInterval(cleanupInterval);
 
-      // Clean up all markers
+      // Clean up all markers and paths
       markersRef.current.forEach((marker) => marker.remove());
       markersRef.current.clear();
+
+      // Clean up all path layers and sources
+      pathSourcesRef.current.forEach((sourceId, registrationId) => {
+        if (map.current && map.current.getLayer(`drone-path-layer-${registrationId}`)) {
+          map.current.removeLayer(`drone-path-layer-${registrationId}`);
+          map.current.removeSource(sourceId);
+        }
+      });
+      pathSourcesRef.current.clear();
 
       socket.close();
     };
   }, []);
 
+  // Clean up markers, paths and map on component unmount
   useEffect(() => {
     return () => {
-      // Clean up markers and map on component unmount
       markersRef.current.forEach((marker) => marker.remove());
       markersRef.current.clear();
+
+      pathSourcesRef.current.forEach((sourceId, registrationId) => {
+        if (map.current && map.current.getLayer(`drone-path-layer-${registrationId}`)) {
+          map.current.removeLayer(`drone-path-layer-${registrationId}`);
+          map.current.removeSource(sourceId);
+        }
+      });
+      pathSourcesRef.current.clear();
+
       map.current?.remove();
       map.current = null;
     };
   }, []);
 
-  return <div id="map-container" ref={initializeMap} />;
+  // Update red drone count whenever journeys change
+  useEffect(() => {
+    const redCount = Array.from(allDroneJourneys.values()).filter((journey) => {
+      if (!journey.currentPosition || journey.currentPosition.altitude === 0) return false;
+      const registrationParts = journey.registrationId.split('-');
+      return !registrationParts[1]?.startsWith('B');
+    }).length;
+
+    setRedDroneCount(redCount);
+  }, [allDroneJourneys]);
+
+  return (
+    <>
+      <div id="map-container" ref={initializeMap} />
+
+      {/* Red drone counter */}
+      <div
+        style={{
+          position: 'absolute',
+          bottom: '16px',
+          right: '16px',
+          backgroundColor: 'rgb(217,217,217)',
+          color: 'black',
+          padding: '8px 12px',
+          borderRadius: '10px',
+          fontSize: '14px',
+          fontWeight: '600',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '6px',
+          boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
+          fontFamily: 'system-ui',
+        }}
+      >
+        <span
+          style={{
+            width: '25px',
+            height: '25px',
+            backgroundColor: '#1F2327',
+            borderRadius: '50%',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: 'white',
+            fontSize: '1em',
+          }}
+        >
+          {redDroneCount}
+        </span>
+        Drone Flying
+      </div>
+    </>
+  );
 }
