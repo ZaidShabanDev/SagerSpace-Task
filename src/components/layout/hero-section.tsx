@@ -13,7 +13,7 @@ export default function HeroSection() {
   useEffect(() => {
     const interval = setInterval(() => {
       setIndex((prevIndex) => (prevIndex + 1) % poetBars.length);
-    }, 10000); // 10 seconds per line
+    }, 5000); // 5 seconds per line
 
     return () => clearInterval(interval);
   }, []);
