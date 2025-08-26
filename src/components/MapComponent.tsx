@@ -312,7 +312,7 @@ export function MapComponent(): JSX.Element {
 
   // Listen for individual drone updates via WebSocket
   useEffect(() => {
-    const socket = io('http://localhost:9013', {
+    const socket = io(import.meta.env.VITE_REACT_APP_BACKEND_URL || 'http://localhost:9013', {
       transports: ['polling'],
     });
 

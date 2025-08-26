@@ -4,9 +4,7 @@ A modern React application built with TypeScript, Vite, Tailwind CSS v4, and sha
 
 ## 🙏 Acknowledgment
 
-This project was developed as part of a technical assessment for a position opportunity.
-I would like to express my sincere gratitude to the company for providing this opportunity to demonstrate my technical skills and for considering my application.
-This task has been an excellent learning experience and a great way to showcase modern React development practices.
+This project was developed as part of a technical assessment for a position opportunity. I would like to express my sincere gratitude to the company for providing this opportunity to demonstrate my technical skills and for considering my application. This task has been an excellent learning experience and a great way to showcase modern React development practices.
 
 ## 🚀 Tech Stack
 
@@ -15,6 +13,7 @@ This task has been an excellent learning experience and a great way to showcase 
 - **Vite** - Lightning-fast build tool and dev server
 - **Tailwind CSS v4** - Next-generation utility-first CSS framework
 - **shadcn/ui** - Beautiful and accessible UI components
+- **Mapbox** - Interactive maps and geolocation services
 - **Prettier** - Code formatting
 - **ESLint** - Code linting and quality
 
@@ -35,6 +34,7 @@ Before running this project, make sure you have the following installed:
    ```
 
 2. **Install dependencies:**
+
    ```bash
    npm install
    # or
@@ -42,6 +42,21 @@ Before running this project, make sure you have the following installed:
    # or
    pnpm install
    ```
+
+3. **Set up environment variables:**
+
+   Create a `.env` file in the root directory and add the following variables:
+
+   ```bash
+   VITE_MAPBOX_ACCESS_TOKEN=your_mapbox_access_token_here
+   VITE_REACT_APP_BACKEND_URL=your_backend_url_here
+   ```
+
+   **Getting your Mapbox Access Token:**
+   - Visit [Mapbox](https://www.mapbox.com/)
+   - Sign up for a free account
+   - Go to your account dashboard
+   - Copy your default public token or create a new one
 
 ## 🚀 Getting Started
 
@@ -61,13 +76,14 @@ The application will be available at `http://localhost:5173`
 
 ## 🆘 Troubleshooting
 
-**Module not found errors:**
-Make sure all dependencies are installed:
+**Module not found errors:** Make sure all dependencies are installed:
 
 ```bash
 rm -rf node_modules package-lock.json
 npm install
 ```
+
+**Environment variable issues:** Ensure your `.env` file is in the root directory and contains the required variables. Restart the development server after adding environment variables.
 
 ## 📚 Learn More
 
@@ -76,7 +92,6 @@ npm install
 - [Vite Documentation](https://vitejs.dev/)
 - [Tailwind CSS Documentation](https://tailwindcss.com/)
 - [shadcn/ui Documentation](https://ui.shadcn.com/)
+- [Mapbox Documentation](https://docs.mapbox.com/)
 
 ---
-
-Happy coding! 🎉
