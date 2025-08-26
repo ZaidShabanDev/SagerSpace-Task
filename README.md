@@ -2,6 +2,15 @@
 
 A modern React application built with TypeScript, Vite, Tailwind CSS v4, and shadcn/ui components.
 
+It is a drone tracing system, it shows all the drones live in space and
+classify them based on their registration number as allowed to fly (green) or not (red).
+
+You can Find it Live on :
+
+```bash
+https://sager-space-task-eta.vercel.app/
+```
+
 ## 🙏 Acknowledgment
 
 This project was developed as part of a technical assessment for a position opportunity. I would like to express my sincere gratitude to the company for providing this opportunity to demonstrate my technical skills and for considering my application. This task has been an excellent learning experience and a great way to showcase modern React development practices.

@@ -6,7 +6,6 @@ import { Sidebar, SidebarContent, SidebarGroup, SidebarHeader, SidebarRail, useS
 import type { NavItem, ViewType } from '@/types';
 import { useState, type JSX } from 'react';
 
-// This is sample data.
 const data = {
   navMain: [
     {

@@ -1,4 +1,3 @@
-// App.tsx
 import { AppSidebar } from '@/components/app-sidebar';
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar';
 import { useState, type JSX } from 'react';
