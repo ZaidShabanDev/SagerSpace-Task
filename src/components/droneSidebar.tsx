@@ -1,6 +1,6 @@
 import type { DroneListPanelProps } from '@/types';
 import { Navigation, X } from 'lucide-react';
-import { type JSX } from 'react';
+import { type JSX, useEffect, useRef } from 'react';
 
 export function DroneSidebar({
   drones,
@@ -9,6 +9,8 @@ export function DroneSidebar({
   selectedDroneId,
   onDroneSelect,
 }: DroneListPanelProps): JSX.Element {
+  const droneRefs = useRef<Record<string, HTMLDivElement | null>>({});
+
   const getDroneColor = (registration: string): string => {
     const registrationParts = registration.split('-');
     const isGreen = registrationParts[1]?.startsWith('B');
@@ -18,6 +20,20 @@ export function DroneSidebar({
   const droneList = Array.from(drones.values()).filter(
     (journey) => journey.currentPosition && journey.currentPosition.altitude > 0
   );
+
+  // Auto-scroll to selected drone
+  useEffect(() => {
+    if (selectedDroneId && droneRefs.current[selectedDroneId]) {
+      const selectedElement = droneRefs.current[selectedDroneId];
+      if (selectedElement) {
+        selectedElement.scrollIntoView({
+          behavior: 'smooth',
+          block: 'nearest',
+          inline: 'nearest',
+        });
+      }
+    }
+  }, [selectedDroneId]);
 
   if (!isOpen) return <></>;
 
@@ -55,14 +71,17 @@ export function DroneSidebar({
             return (
               <div
                 key={journey.registrationId}
+                ref={(el) => {
+                  droneRefs.current[journey.registrationId] = el;
+                }}
                 onClick={() => {
                   if (journey.currentPosition) {
                     onDroneSelect(journey.registrationId, [journey.currentPosition.lng, journey.currentPosition.lat]);
                   }
                 }}
-                className={`relative cursor-pointer border-b border-black/5 px-5 py-4 transition-all duration-200 ${
+                className={`relative cursor-pointer border-b border-l-[#000] px-5 py-4 transition-all duration-200 ${
                   isSelected
-                    ? `border-l-4 border-l-[${droneColor}] bg-[rgb(37,37,38)]`
+                    ? `border-l-4 border-l-[#fbfbfe] bg-[rgb(37,37,38)]`
                     : 'border-l-4 border-l-transparent bg-transparent'
                 }`}
               >
